@@ -1,0 +1,81 @@
+import rasterio
+import numpy as np
+import geopandas as gpd
+import rasterio.features
+
+#study area
+aoi=gpd.read_file(r"C:\Admin\Documents\Summer_Project\SHPs\Upper_Alakananda.shp")
+aoi.crs
+geometries=aoi.geometry
+
+#opening a reference raster
+with rasterio.open(r"C:\Admin\Documents\Summer_Project\Worldclim\Max_Temp_2010-19\wc2.1_cruts4.09_2.5m_tmax_2010-01.tif") as src:
+    raster_width = src.width
+    raster_height = src.height
+    raster_transform = src.transform
+    raster_profile = src.profile.copy()
+
+#generate the 2D boolean mask
+study_area_mask = rasterio.features.geometry_mask(
+    geometries=geometries,
+    out_shape=(raster_height, raster_width),
+    transform=raster_transform,
+    invert=True
+)
+
+print(f"Mask created with shape: {study_area_mask.shape}")
+print(f"Original raster shape: ({raster_height}, {raster_width})")
+
+#File paths
+Tmax2022_path=r"C:\Users\Admin\Documents\Summer_Project\Worldclim\Max_Temp_2020-24\Max2022\*"
+Tmin2022_path=r"C:\Users\Admin\Documents\Summer_Project\Worldclim\Min_Temp_2020-24\Tmin2022\*"
+
+#using glob for correct file allignemnt of months from 1 to 12
+import glob
+tmax_files = sorted(glob.glob(Tmax2022_path))
+tmin_files = sorted(glob.glob(Tmin2022_path))
+assert len(tmax_files) == 12 and len(tmin_files) == 12, "Ensure to have exactly 12 files for both Tmin and Tmax."
+
+#Mask
+tmax_list = []
+tmin_list = []
+#loop through and mask Max Temperature
+for file_path in tmax_files:
+    with rasterio.open(file_path) as src:
+        # Read as float32 so the grid can natively hold np.nan values
+        arr = src.read(1).astype(np.float32)
+        arr[~study_area_mask] = np.nan
+        tmax_list.append(arr)
+
+#loop through and mask Min Temperature
+for file_path in tmin_files:
+    with rasterio.open(file_path) as src:
+        arr = src.read(1).astype(np.float32)
+        arr[~study_area_mask] = np.nan
+        tmin_list.append(arr)
+
+#stacking into 3D arrray
+#stack into 3D Arrays (Shape: 12, 4320, 8640)
+tmax_3d = np.stack(tmax_list, axis=0)
+tmin_3d = np.stack(tmin_list, axis=0)
+
+#compute 12-month mean for max and min 
+annual_max_mean = np.nanmean(tmax_3d, axis=0)
+annual_min_mean = np.nanmean(tmin_3d, axis=0)
+
+#Mean Annual Temperature
+mean_annual_temp = (annual_max_mean + annual_min_mean) / 2.0
+
+#save and export
+output_raster_path=r"C:\Admin\Summer_Project\Worldclim\Output_mean_temp2022\mean_annual_temperature_2022.tif"
+raster_profile.update(
+    dtype=rasterio.float32,
+    count=1,                # We are writing 1 annual band, not 12 monthly bands
+    nodata=np.nan           # Define the official nodata flag for GIS software
+)
+
+#save
+with rasterio.open(output_raster_path, "w", **raster_profile) as dst:
+    dst.write(mean_annual_temp, 1)
+
+print(f"Success! Final masked raster saved to: {output_raster_path}")
