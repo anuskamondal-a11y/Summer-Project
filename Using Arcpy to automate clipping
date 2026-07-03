@@ -1,0 +1,34 @@
+import arcpy
+from arcpy.sa import *
+
+arcpy.CheckOutExtension("Spatial")
+
+#folder paths
+input_folder = r"C:\Users\Admin\Documents\Summer_Project\Inputrasters"
+output_folder = r"C:\Users\Admin\Documents\Summer_Project\Outputfolder"
+
+#study area shapefile
+clip = r"C:\Users\Admin\Documents\Summer_Project\study_bound.shp"
+
+#set workspace
+arcpy.env.workspace = input_folder
+arcpy.env.overwriteOutput = True
+
+#list rasters
+rasters = arcpy.ListRasters()
+
+for raster in rasters:
+    #extract by mask
+    clipped_raster = ExtractByMask(raster, clip)
+
+    #create output path
+    out_raster = f"{output_folder}\\{raster}"
+
+    #save result
+    clipped_raster.save(out_raster)
+    print("saved")
+
+#release extension
+arcpy.CheckInExtension("Spatial")
+
+print("All rasters clipped successfully.")
