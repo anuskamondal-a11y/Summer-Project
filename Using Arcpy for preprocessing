@@ -1,1 +1,60 @@
+import arcpy
+from arcpy import env
+from arcpy.sa import *
+
+arcpy.env.overwriteOutput = True
+
+#Folder paths
+input_folder = r"C:\Users\Admin\Documents\Summer_Project\Inputrasters"
+output_folder = r"C:\Users\Admin\Documents\Summer_Project\OutputRasters2"
+#Clip boundary shapefile
+clip_feature = r"C:\Users\Admin\Documents\Summer_Project\SHPs\Upper_Alakananda.shp"
+
+#Target projection 
+target_projection = arcpy.SpatialReference(32644)  
+#32644 = WGS 84 UTM Zone 44N
+
+#Target cell size (meters)
+cell_size = 30
+
+#List all raster files
+rasters = arcpy.ListRasters("*", "TIF")
+
+env.workspace = input_folder
+
+for raster in rasters:
+    print(f"Processing: {raster}")
+    
+    #Project Raster
+    projected = output_folder + "\\proj_" + raster
+    arcpy.management.ProjectRaster(
+        raster,
+        projected,
+        target_projection,
+        "NEAREST",
+        cell_size
+    )
+    
+    #Resample 
+    resampled = output_folder + "\\res_" + raster
+    arcpy.management.Resample(
+        projected,
+        resampled,
+        cell_size,
+        "NEAREST"
+    )
+    
+    #Clip
+    clipped = output_folder + "\\clip_" + raster
+    arcpy.management.Clip(
+        resampled,
+        "#",
+        clipped,
+        clip_feature,
+        "#",
+        "ClippingGeometry",
+        "NO_MAINTAIN_EXTENT"
+    )
+
+print("All rasters processed successfully!")
 
